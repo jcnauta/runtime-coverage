@@ -1,28 +1,45 @@
 'use strict';
 
-const { CoverageInstrumenter } = require('collect-v8-coverage');
+const {
+  CoverageInstrumenter
+} = require('collect-v8-coverage');
 const v8ToIstanbul = require('v8-to-istanbul');
 const libCoverage = require('istanbul-lib-coverage');
 const libReport = require('istanbul-lib-report');
 const istanbulReports = require('istanbul-reports');
-const { fileURLToPath } = require('url');
+const {
+  fileURLToPath
+} = require('url');
 const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
-const { fork } = require('child_process');
+const {
+  fork
+} = require('child_process');
 const Promise = require('bluebird');
 const klawSync = require('klaw-sync');
 const semver = require('semver');
 
-const {mergeMap} = require('./v8-coverage');
-const {debug, shouldCover} = require('./utils');
+const {
+  mergeMap
+} = require('./v8-coverage');
+const {
+  debug,
+  shouldCover
+} = require('./utils');
 const fixReport = require('./fixReport');
 
 let v8CoverageInstrumenter;
 
 async function getEmptyV8Coverage(files, options) {
-  const getEmptyV8CoverageProcess = fork(path.join(__dirname, 'getEmptyV8Coverage'), [], {env: {}, execArgv: []});
-  getEmptyV8CoverageProcess.send({ files, options });
+  const getEmptyV8CoverageProcess = fork(path.join(__dirname, 'getEmptyV8Coverage'), [], {
+    env: {},
+    execArgv: []
+  });
+  getEmptyV8CoverageProcess.send({
+    files,
+    options
+  });
   let replyReceived = false;
   try {
     // we need to await here, otherwise finally won't work
@@ -41,7 +58,7 @@ async function getEmptyV8Coverage(files, options) {
         .on('exit', (code, signal) => reject(new Error(`process closed before data was sent! code: ${code} signal: ${signal}`)));
     });
     return result;
-  }  finally {
+  } finally {
     if (!replyReceived) {
       debug.emptyCov('Reply not received, killing empty coverage process');
       getEmptyV8CoverageProcess.kill('SIGTERM');
@@ -51,8 +68,12 @@ async function getEmptyV8Coverage(files, options) {
 
 
 function getAllProjectFiles(options) {
-  const filterFunc = file=>shouldCover(file.path, options);
-  const files = klawSync(options.rootDir, {filter: filterFunc, traverseAll: true, nodir: true});
+  const filterFunc = file => shouldCover(file.path, options);
+  const files = klawSync(options.rootDir, {
+    filter: filterFunc,
+    traverseAll: true,
+    nodir: true
+  });
   return files.map(file => file.path);
 }
 
@@ -68,7 +89,7 @@ function normalizeOptions(options) {
   options.deleteCoverage = options.deleteCoverage || options.deleteCoverage === undefined;
   options.coverageDirectory = path.normalize(options.coverageDirectory || fs.mkdtempSync(`${os.tmpdir()}${path.sep}`));
   options.return = options.return || options.return === undefined;
-  options.forceReload = options.forceReload || options.forceReload === undefined;
+  options.forceReload = options.forceReload || false;
   if (!options.reporters || !options.reporters.length) {
     options.reporters = ['text'];
   }
@@ -101,7 +122,7 @@ async function runReporters(options, map, coverageData) {
 
   options.reporters.forEach((reporter) => {
     if (reporter === 'v8') {
-      return;// we will deal with it later
+      return; // we will deal with it later
     }
     const reportOptions = {
       file: reporter,
@@ -112,8 +133,8 @@ async function runReporters(options, map, coverageData) {
   let res = true;
   const allStreamsClosed = [];
   if (options.return) {
-    const files = fs.readdirSync(options.coverageDirectory).filter(f=>f !== '.' && f !== '..');
-    res = await Promise.reduce(files,  async (data, filename)=>{
+    const files = fs.readdirSync(options.coverageDirectory).filter(f => f !== '.' && f !== '..');
+    res = await Promise.reduce(files, async (data, filename) => {
       const filePath = path.join(options.coverageDirectory, filename);
       if (fs.lstatSync(filePath).isDirectory()) {
         // ignore dirs
@@ -126,17 +147,20 @@ async function runReporters(options, map, coverageData) {
         // data[filename] = data[filename].replace(/<computed>/g, '&lt;computed&gt;');
       }
       if (options.stream) {
-        const stream = fs.createReadStream(filePath, {encoding: 'utf8', emitClose: true});
+        const stream = fs.createReadStream(filePath, {
+          encoding: 'utf8',
+          emitClose: true
+        });
         data[filename] = stream;
-        const streamClosed = new Promise((resolve, reject)=>{
-          stream.once('error', err=>reject(err));
-          stream.once('close', ()=>resolve());
+        const streamClosed = new Promise((resolve, reject) => {
+          stream.once('error', err => reject(err));
+          stream.once('close', () => resolve());
         });
         allStreamsClosed.push(streamClosed);
-        streamClosed.timeout(options.streamTimeout).catch(Promise.TimeoutError, ()=>{
+        streamClosed.timeout(options.streamTimeout).catch(Promise.TimeoutError, () => {
           debug.reporters(`No one uses stream ${filePath}, destroying it...`);
           stream.destroy();
-        }).catch((err)=>{
+        }).catch((err) => {
           debug.reporters('failed to destroy stream', err);
         });
       } else {
@@ -146,9 +170,9 @@ async function runReporters(options, map, coverageData) {
     }, {});
   }
   if (options.deleteCoverage) {
-    Promise.all(allStreamsClosed).catch((err)=>{
+    Promise.all(allStreamsClosed).catch((err) => {
       debug.reporters('Failed read coverage data in stream', err);
-    }).finally(async ()=>{
+    }).finally(async () => {
       try {
         await fs.remove(options.coverageDirectory);
         debug.reporters('coverage directory removed');
@@ -165,16 +189,16 @@ async function runReporters(options, map, coverageData) {
 }
 
 function MergeFullCoverage(coverageData, emptyCoverage) {
-  coverageData.forEach((report)=>{
-    const emptyReport = emptyCoverage.find((rep)=>{
+  coverageData.forEach((report) => {
+    const emptyReport = emptyCoverage.find((rep) => {
       return rep.url === report.url;
     });
     if (!emptyReport) {
       debug.mergeCov(`No empty report for ${report.url}, smth went wrong?`);
       return;
     }
-    Object.values(emptyReport.functions).forEach((missingFunc)=>{
-      const coveredFunc = report.functions.find(el=>el.functionName === missingFunc.functionName);
+    Object.values(emptyReport.functions).forEach((missingFunc) => {
+      const coveredFunc = report.functions.find(el => el.functionName === missingFunc.functionName);
       if (!coveredFunc) {
         debug.mergeCov(`Adding func "${missingFunc.functionName}"`);
         if (missingFunc.functionName === '') {
@@ -182,13 +206,13 @@ function MergeFullCoverage(coverageData, emptyCoverage) {
         } else {
           report.functions.push(missingFunc);
         }
-      }  else {
+      } else {
         debug.mergeCov(`checking ranges for adding func "${missingFunc.functionName}":`);
         debug.mergeCov(`missing: ${JSON.stringify(missingFunc.ranges)}`);
         debug.mergeCov(`existing func ranges: ${JSON.stringify(coveredFunc.ranges)}`);
         // check missing ranges
-        const coveredRanges = Object.values(coveredFunc.ranges).map(el=>`${el.startOffset}-${el.endOffset}`);
-        Object.values(missingFunc.ranges).forEach((range)=>{
+        const coveredRanges = Object.values(coveredFunc.ranges).map(el => `${el.startOffset}-${el.endOffset}`);
+        Object.values(missingFunc.ranges).forEach((range) => {
           debug.mergeCov(`checking if range hash ${Object.values(range).join('-')} is in ${JSON.stringify(coveredRanges)}`);
           if (!coveredRanges.includes(`${range.startOffset}-${range.endOffset}`)) {
             coveredFunc.ranges.push(range);
@@ -225,17 +249,20 @@ async function getCoverage(options) {
   if (!v8CoverageInstrumenter) {
     throw new Error('You need to start coverage first!');
   }
-  const v8CoverageResult = await v8CoverageInstrumenter.stopInstrumenting();
-  debug.getCov('stopped instrumenting');
+  const v8CoverageResult = await v8CoverageInstrumenter.getCoverage();
+  debug.getCov('got coverage');
   v8CoverageInstrumenter = null;
 
   const coverageData = v8CoverageResult
     .filter(res => res.url.startsWith('file://'))
-    .map(res => ({ ...res, url: fileURLToPath(res.url) }))
+    .map(res => ({
+      ...res,
+      url: fileURLToPath(res.url)
+    }))
     .filter(res => shouldCover(res.url, options));
   v8CoverageResult.length = 0; // we don't need it any more
 
-  const coveredFiles = coverageData.map(data=>data.url);
+  const coveredFiles = coverageData.map(data => data.url);
   if (options.forceReload) {
     // get empty coverage data for merging later
     const emptyCoverage = await getEmptyV8Coverage(coveredFiles, options);
@@ -253,7 +280,9 @@ async function getCoverage(options) {
     }
     converter.applyCoverage(report.functions);
     return converter.toIstanbul();
-  }, {concurrency: 1});
+  }, {
+    concurrency: 1
+  });
   if (!options.reporters.includes('v8')) {
     // drop it, not needed any more
     coverageData.length = 0;
@@ -275,7 +304,9 @@ async function getCoverage(options) {
       }
       converter.applyCoverage([createEmptyCoverageBlock(file)]); // apply empty coverage
       return converter.toIstanbul();
-    }, {concurrency: 1});
+    }, {
+      concurrency: 1
+    });
     reportsList = reportsListCovered.concat(reportsListEmpty.filter(Boolean));
   } else {
     reportsList = reportsListCovered;
@@ -288,12 +319,15 @@ async function getCoverage(options) {
   return runReporters(options, map, coverageData);
 }
 
-
-async function startCoverage() {
+async function checkNodeVersion() {
   if (!semver.satisfies(process.version, '>= 10.12.0')) {
     throw new Error(`Node version ${process.version} does not have coverage information!
     Please use node >= 10.12.0 or babel coverage.`);
   }
+}
+
+async function startCoverage() {
+  checkNodeVersion()
   if (v8CoverageInstrumenter) {
     debug.startCov('v8CoverageInstrumenter already started, restarting it');
     await v8CoverageInstrumenter.stopInstrumenting();
@@ -305,8 +339,20 @@ async function startCoverage() {
   return true;
 }
 
+async function stopCoverage() {
+  checkNodeVersion()
+  if (v8CoverageInstrumenter) {
+    await v8CoverageInstrumenter.stopInstrumenting();
+    v8CoverageInstrumenter = null;
+    return true
+  } else {
+    debug.stopCov('v8CoverageInstrumenter not started, cannot stop');
+    return false
+  }
+}
 
 module.exports = {
   startCoverage,
   getCoverage,
+  stopCoverage,
 };

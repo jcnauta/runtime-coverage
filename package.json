@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "bluebird": "^3.7.2",
-    "collect-v8-coverage": "^1.0.0",
+    "collect-v8-coverage": "git@github.com:jcnauta/collect-v8-coverage.git#77efb81",
     "debug": "^4.1.1",
     "fs-extra": "^8.1.0",
     "istanbul-lib-coverage": "^3.0.0",

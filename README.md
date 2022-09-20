@@ -8,7 +8,7 @@
 
 Enable coverage any time after service startup, gather coverage and disable it!
 
-Useful for integration tests and checking for dead code branches.
+Useful for integration tests, checking for dead code branches, fuzzing, etc.
 
 ## Usage
 
@@ -71,6 +71,10 @@ will be a stream, which will be destroyed after `streamTimeout` if not used.
 ### Sample
 
 Short express sample [here](https://github.com/jehy/runtime-coverage-sample).
+
+### How it works
+
+This modules uses the `node:inspector` module via the thin wrapper `collect-v8-coverage`. The inspector's `Session` objects can connect to the v8-backend and make requests using the `session.post` method as documented [here](https://nodejs.org/api/inspector.html#class-inspectorsession). Possible methods are documented [in the Chrome devtools protocol](https://chromedevtools.github.io/devtools-protocol/v8/Profiler/). In particular, we use the methods `startPreciseCoverage` (detailed and with call counts), `takePreciseCoverage` and `stopPreciseCoverage`.
 
 ### Beware
 
