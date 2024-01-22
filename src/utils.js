@@ -22,7 +22,7 @@ function match(itemPath, excludeArray) {
 }
 
 function shouldCover(fileName, options) {
-  return fileName.startsWith(options.rootDir) && fileName.endsWith('.js') && !match(fileName, options.exclude);
+  return fileName.startsWith(options.rootDir) && (fileName.endsWith('.js') || fileName.endsWith('.ts')) && !match(fileName, options.exclude);
 }
 
 module.exports = {debug, shouldCover};
